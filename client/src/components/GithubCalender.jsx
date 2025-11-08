@@ -22,7 +22,7 @@ const GithubCalenderFunc = () => {
                 </div>
 
                 <GithubCalender
-                    username="Rakesh-99"
+                    username="talal-atiq"
                     color="green"
                     fontSize={12}
                     blockSize={9}

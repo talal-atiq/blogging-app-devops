@@ -33,7 +33,7 @@ const GithubCard = () => {
 
                         <button className='font-semibold py-1 bg-violet-500 w-full rounded-md flex items-center gap-2 text-center justify-center hover:bg-violet-700 transition-all'>
                             <FaGithub size={25} />
-                            <Link to={'https://github.com/Rakesh-99?tab=repositories'}>FIND MORE REPOSITORIES</Link>
+                            <Link to={'https://github.com/talal-atiq?tab=repositories'}>FIND MORE REPOSITORIES</Link>
                         </button>
                     </div>
                 </div>

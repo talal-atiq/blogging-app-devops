@@ -1,0 +1,41 @@
+version: '3.8'
+
+# This file is for the Jenkins build.
+# It builds images from source and runs them on new ports.
+
+services:
+  # The Backend Service
+  backend-ci:
+    # 'build:' tells docker-compose to build from a Dockerfile
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: blogging-backend-ci
+    env_file:
+      - server.env
+    # 'volumes:' mounts your live code into the container
+    # This fulfills the "Attach a volume for the code" requirement
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    restart: always
+
+  # The Frontend Service
+  frontend-ci:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: blogging-frontend-ci
+    ports:
+      # Use a new port, as requested (e.g., 8081)
+      - "8081:80"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    restart: always
+    depends_on:
+      - backend-ci
+
+# Note: This file doesn't run on its own.
+# You need to create a 'server.env' file right next to it
+# before you run it. The Jenkins pipeline will do this.

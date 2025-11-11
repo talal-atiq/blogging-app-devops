@@ -53,7 +53,7 @@ pipeline {
             // For testing with your friend, you can comment out
             // the line below so the site stays UP.
             
-            // sh 'sudo docker-compose -f docker-compose.yml down'
+            sh 'sudo docker-compose -f docker-compose.yml down --remove-orphans'
         }
     }
 }

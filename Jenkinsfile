@@ -35,6 +35,7 @@ pipeline {
                 // It reads your docker-compose.yml,
                 // BUILDS the images, and starts them
                 // We use -f just to be explicit
+                sh 'docker-compose -f docker-compose.yml down --remove-orphans'
                 sh 'docker-compose -f docker-compose.yml up -d --build'
             }
         }

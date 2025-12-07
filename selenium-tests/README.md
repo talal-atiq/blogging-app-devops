@@ -1,0 +1,218 @@
+# Blog App - Selenium Automated Tests
+
+Automated Selenium test suite for MERN Blog Application (DevOps Assignment 3)
+
+## 📋 Overview
+
+This repository contains **12 automated Selenium test cases** for testing the MERN stack blog application. Tests are designed to run in headless Chrome and can be executed locally, in Docker containers, or as part of a Jenkins CI/CD pipeline.
+
+## ✅ Test Cases Included
+
+### Authentication Tests (5 tests)
+1. ✓ User registration with valid data
+2. ✓ User registration with duplicate email
+3. ✓ User login with valid credentials
+4. ✓ User login with invalid credentials
+5. ✓ User logout functionality
+
+### Blog Post Tests (5 tests)
+6. ✓ Create new blog post
+7. ✓ View blog post details
+8. ✓ Edit existing blog post
+9. ✓ Delete blog post
+10. ✓ Search blog posts
+
+### Feature Tests (2 tests)
+11. ✓ Add comment to blog post
+12. ✓ Toggle light/dark theme
+
+## 🛠 Technology Stack
+
+- **Testing Framework**: Pytest
+- **Browser Automation**: Selenium WebDriver
+- **Browser**: Google Chrome (Headless)
+- **Language**: Python 3.10+
+- **Containerization**: Docker
+- **CI/CD**: Jenkins
+
+## 📁 Project Structure
+
+```
+.
+├── tests/
+│   ├── __init__.py
+│   ├── test_authentication.py      # Authentication test cases
+│   ├── test_blog_posts.py          # Blog CRUD test cases
+│   └── test_additional_features.py # Comments & theme tests
+├── utils/
+│   ├── __init__.py
+│   └── driver_setup.py             # WebDriver configuration
+├── config.py                        # Test configuration
+├── requirements.txt                 # Python dependencies
+├── Dockerfile                       # Docker image for tests
+└── README.md                        # This file
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Google Chrome browser
+- ChromeDriver (managed automatically by webdriver-manager)
+
+### Local Setup
+
+1. **Clone this repository**:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/blogging-app-selenium-tests.git
+   cd blogging-app-selenium-tests
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Update configuration**:
+   Edit `config.py` and set your application URL:
+   ```python
+   BASE_URL = 'http://your-ec2-ip:8081'
+   ```
+
+4. **Run tests locally**:
+   ```bash
+   # Run all tests
+   pytest tests/ -v
+   
+   # Run with HTML report
+   pytest tests/ -v --html=report.html --self-contained-html
+   
+   # Run specific test file
+   pytest tests/test_authentication.py -v
+   ```
+
+## 🐳 Running in Docker
+
+1. **Build Docker image**:
+   ```bash
+   docker build -t selenium-test-image .
+   ```
+
+2. **Run tests in container**:
+   ```bash
+   docker run --rm \
+     --network host \
+     -e APP_URL=http://your-ec2-ip:8081 \
+     selenium-test-image
+   ```
+
+3. **Run with volume mount to get reports**:
+   ```bash
+   docker run --rm \
+     --network host \
+     -e APP_URL=http://your-ec2-ip:8081 \
+     -v $(pwd)/reports:/tests \
+     selenium-test-image
+   ```
+
+## 🔧 Jenkins Integration
+
+### Jenkins Pipeline Setup
+
+The tests are integrated into a Jenkins pipeline that:
+1. Checks out application code from GitHub
+2. Builds and deploys the application using Docker Compose
+3. Waits for application to be ready
+4. Checks out test code from this repository
+5. Builds Docker image for tests
+6. Runs Selenium tests in a Docker container
+7. Archives test results
+8. Emails results to collaborators
+
+### Required Jenkins Plugins
+
+- Email Extension Plugin
+- GitHub Integration Plugin
+- Docker Pipeline Plugin
+- HTML Publisher Plugin
+- JUnit Plugin
+
+### Jenkins Configuration
+
+1. **Install required plugins** (Manage Jenkins → Plugins)
+
+2. **Configure email notifications** (Manage Jenkins → System):
+   - SMTP Server: `smtp.gmail.com`
+   - SMTP Port: `587`
+   - Use SSL: Yes
+   - Add email credentials
+
+3. **Set up GitHub webhook**:
+   - Repository Settings → Webhooks → Add webhook
+   - Payload URL: `http://your-ec2-ip:8080/github-webhook/`
+   - Content type: `application/json`
+   - Trigger on: Push events
+
+4. **Update Jenkinsfile** in your application repository with the provided configuration
+
+## 📊 Test Reports
+
+Test results are generated in multiple formats:
+
+- **HTML Report**: `report.html` - Human-readable test results
+- **JUnit XML**: `test-results.xml` - Machine-readable for Jenkins
+- **Console Output**: Detailed test execution logs
+
+View reports in Jenkins:
+- Navigate to build → "Selenium Test Report"
+- Or check email attachment
+
+## 🔍 Configuration Options
+
+### Environment Variables
+
+- `APP_URL`: Target application URL (required)
+- `DEFAULT_TIMEOUT`: WebDriver wait timeout (default: 10 seconds)
+
+### Test Data
+
+Edit `config.py` to customize:
+- Test user credentials
+- Blog post content
+- Timeouts
+
+## 🐛 Troubleshooting
+
+### Tests fail with "Connection refused"
+- Ensure the application is running and accessible
+- Check APP_URL is correct
+- Verify firewall/security group settings
+
+### ChromeDriver version mismatch
+- The `webdriver-manager` automatically downloads matching ChromeDriver
+- For Docker, the Dockerfile installs compatible versions
+
+### Tests timeout
+- Increase `DEFAULT_TIMEOUT` in `config.py`
+- Check application performance
+- Ensure EC2 instance has sufficient resources
+
+## 📝 Assignment Requirements Checklist
+
+- [x] 10+ automated test cases using Selenium
+- [x] Tests use headless Chrome
+- [x] Tests stored in separate GitHub repository
+- [x] Dockerfile for containerized test execution
+- [x] Jenkins pipeline with test stage
+- [x] GitHub webhook triggers pipeline
+- [x] Email notifications to collaborators
+- [x] Test results archived in Jenkins
+
+## 👥 Author
+
+Created for DevOps Assignment 3 - Semester 7
+
+## 📄 License
+
+This project is for educational purposes as part of university coursework.

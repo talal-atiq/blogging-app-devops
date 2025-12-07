@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        APP_URL = "http://98.83.36.74:8081"
+        APP_URL = "http://44.200.64.17:8081"
     }
     
     triggers {

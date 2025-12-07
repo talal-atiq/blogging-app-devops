@@ -14,7 +14,7 @@ pipeline {
         APP_URL = "http://98.93.37.134:8081"
         
         // Optional: Set to 'true' to skip admin-only tests if you don't have admin credentials
-        // SKIP_ADMIN_TESTS = "false"
+        // SKIP_ADMIN_TESTS = "true"
     }
 
     // Trigger pipeline on GitHub push
@@ -118,7 +118,7 @@ pipeline {
             archiveArtifacts artifacts: 'report.html,test-results.xml', allowEmptyArchive: true
             
             // Publish JUnit test results
-            junit 'test-results.xml', allowEmptyResults: true
+            junit testResults: 'test-results.xml', allowEmptyResults: true
             
             // Publish HTML report
             publishHTML([

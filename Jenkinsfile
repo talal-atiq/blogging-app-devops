@@ -49,7 +49,7 @@ pipeline {
                                     --memory-swap="1g" \
                                     -e APP_URL=${APP_URL} \
                                     selenium-tests:latest \
-                                    pytest tests/test_api_suite.py -v --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml
+                                    pytest tests/test_selenium_lightweight.py -v --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml
                                 EXIT_CODE=\$?
                                 
                                 # Copy test results out of container
@@ -135,7 +135,8 @@ pipeline {
                             </table>
                             
                             <h3>Test Results</h3>
-                            <p>📊 <strong>12 API test cases executed in Docker container</strong></p>
+                            <p>📊 <strong>12 Selenium test cases executed in Docker container</strong></p>
+                            <p>🌐 <strong>Chrome WebDriver (Headless Mode)</strong></p>
                             <p>📄 HTML and JUnit XML reports generated</p>
                             <p>📎 Detailed HTML test report attached to this email</p>
                             

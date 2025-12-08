@@ -1,7 +1,4 @@
-# Dockerfile for Selenium Test Environment
-# This creates a container with Python, Chrome, ChromeDriver, and Selenium
-
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Install dependencies for Chrome
 RUN apt-get update && apt-get install -y \
@@ -10,24 +7,24 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     ca-certificates \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Add Google Chrome repository and install Chrome
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+# Install Chrome (latest stable) - FIXED METHOD
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver
-RUN CHROMEDRIVER_VERSION=`curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE` && \
-    wget -q --continue -P /tmp "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" && \
-    unzip /tmp/chromedriver_linux64.zip -d /usr/local/bin/ && \
-    rm /tmp/chromedriver_linux64.zip && \
-    chmod +x /usr/local/bin/chromedriver
-
-# Set display port to avoid crash
-ENV DISPLAY=:99
+# Install ChromeDriver (matching Chrome version)
+RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d'.' -f1-3) \
+    && echo "Chrome version: $CHROME_VERSION" \
+    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip \
+    && unzip /tmp/chromedriver.zip -d /tmp/ \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm -rf /tmp/chromedriver*
 
 # Set working directory
 WORKDIR /tests
@@ -39,5 +36,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy test code
 COPY . .
 
-# Default command to run tests
-CMD ["pytest", "tests/", "-v", "--html=report.html", "--self-contained-html"]
+# Set environment variable
+ENV PYTHONUNBUFFERED=1
+
+# Default command
+CMD ["pytest", "tests/", "-v", "--html=report.html", "--self-contained-html", "--junit-xml=test-results.xml"]

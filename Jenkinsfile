@@ -30,20 +30,28 @@ pipeline {
                 echo '=== Running Selenium tests in Docker container ==='
                 script {
                     dir('selenium-tests') {
-                        // Run tests in Docker with memory limits
+                        // Run tests in Docker with memory limits (without volume mounts)
                         def testStatus = sh(
                             script: """
-                                docker run --rm \
+                                docker run --name selenium-test-run \
                                     --memory="1g" \
                                     --memory-swap="1g" \
                                     -e APP_URL=${APP_URL} \
-                                    -v \$(pwd)/report.html:/tests/report.html \
-                                    -v \$(pwd)/test-results.xml:/tests/test-results.xml \
                                     selenium-tests:latest \
-                                    pytest tests/ -v -x --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml
+                                    pytest tests/ -v -x --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml || true
+                                
+                                # Copy test results out of container
+                                docker cp selenium-test-run:/tests/report.html ./report.html || echo "No report.html"
+                                docker cp selenium-test-run:/tests/test-results.xml ./test-results.xml || echo "No test-results.xml"
+                                
+                                # Get exit code from container
+                                docker inspect selenium-test-run --format='{{.State.ExitCode}}'
                             """,
-                            returnStatus: true
-                        )
+                            returnStdout: true
+                        ).trim().toInteger()
+                        
+                        // Clean up container
+                        sh 'docker rm selenium-test-run || true'
                         
                         if (testStatus != 0) {
                             currentBuild.result = 'UNSTABLE'

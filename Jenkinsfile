@@ -30,32 +30,33 @@ pipeline {
                 echo '=== Running Selenium tests in Docker container ==='
                 script {
                     dir('selenium-tests') {
-                        // Run tests in Docker with memory limits (without volume mounts)
+                        // Run tests and capture exit code
                         def testStatus = sh(
                             script: """
+                                set +e
                                 docker run --name selenium-test-run \
                                     --memory="1g" \
                                     --memory-swap="1g" \
                                     -e APP_URL=${APP_URL} \
                                     selenium-tests:latest \
-                                    pytest tests/ -v -x --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml || true
+                                    pytest tests/ -v -x --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml
+                                EXIT_CODE=\$?
                                 
                                 # Copy test results out of container
-                                docker cp selenium-test-run:/tests/report.html ./report.html || echo "No report.html"
-                                docker cp selenium-test-run:/tests/test-results.xml ./test-results.xml || echo "No test-results.xml"
+                                docker cp selenium-test-run:/tests/report.html ./report.html 2>/dev/null || echo "No report.html"
+                                docker cp selenium-test-run:/tests/test-results.xml ./test-results.xml 2>/dev/null || echo "No test-results.xml"
                                 
-                                # Get exit code from container
-                                docker inspect selenium-test-run --format='{{.State.ExitCode}}'
+                                # Clean up container
+                                docker rm selenium-test-run 2>/dev/null || true
+                                
+                                exit \$EXIT_CODE
                             """,
-                            returnStdout: true
-                        ).trim().toInteger()
-                        
-                        // Clean up container
-                        sh 'docker rm selenium-test-run || true'
+                            returnStatus: true
+                        )
                         
                         if (testStatus != 0) {
                             currentBuild.result = 'UNSTABLE'
-                            echo "Tests encountered failures"
+                            echo "Tests encountered failures (exit code: ${testStatus})"
                         } else {
                             echo "All tests passed!"
                         }

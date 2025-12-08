@@ -1,13 +1,10 @@
 """
 WebDriver Setup Utility for Headless Chrome
-Configures Chrome WebDriver for automated testing in EC2 environment
+Configures Chrome Web Driver for automated testing in EC2 environment
 """
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-import os
 
 
 def get_chrome_driver(headless=True):
@@ -23,30 +20,31 @@ def get_chrome_driver(headless=True):
     chrome_options = Options()
     
     if headless:
-        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--headless=new')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--window-size=800,600')
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-software-rasterizer')
+    
+    # Memory optimization options
+    chrome_options.add_argument('--disable-background-networking')
+    chrome_options.add_argument('--disable-default-apps')
+    chrome_options.add_argument('--disable-sync')
+    chrome_options.add_argument('--mute-audio')
+    chrome_options.add_argument('--no-first-run')
     
     # Additional options for stability
     chrome_options.add_argument('--disable-blink-features=AutomationControlled')
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     
-    # Initialize the driver
-    try:
-        # Try using ChromeDriverManager first
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-    except Exception as e:
-        print(f"ChromeDriverManager failed: {e}")
-        # Fallback to system chromedriver
-        driver = webdriver.Chrome(options=chrome_options)
+    # Use system chromedriver (pre-installed in Docker)
+    driver = webdriver.Chrome(options=chrome_options)
     
-    # Set implicit wait
+    # Set timeouts
+    driver.set_page_load_timeout(30)
     driver.implicitly_wait(10)
     
     return driver

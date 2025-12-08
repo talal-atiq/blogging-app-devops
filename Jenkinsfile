@@ -2,45 +2,54 @@ pipeline {
     agent any
     
     environment {
-        APP_URL = "http://44.200.64.17:8081"
-    }
-    
-    triggers {
-        githubPush()
+        APP_URL = 'http://3.238.100.116:8081'
+        DEFAULT_RECIPIENTS = 'iamtalalatique@gmail.com'  // Update this
     }
     
     stages {
         stage('Checkout Code') {
             steps {
-                echo '=== Checking out test code from GitHub ==='
+                echo '=== Checking out code from GitHub ==='
                 checkout scm
             }
         }
         
-        stage('Run Selenium Tests') {
+        stage('Build Test Docker Image') {
             steps {
-                echo '=== Running Selenium tests on EC2 ==='
+                echo '=== Building Docker image for Selenium tests ==='
+                dir('selenium-tests') {
+                    script {
+                        sh 'docker build -t selenium-tests:latest .'
+                    }
+                }
+            }
+        }
+        
+        stage('Run Selenium Tests in Docker') {
+            steps {
+                echo '=== Running Selenium tests in Docker container ==='
                 script {
                     dir('selenium-tests') {
+                        // Run tests in Docker with memory limits
                         def testStatus = sh(
-                            script: '''
-                                export APP_URL=${APP_URL}
-                                python3 -m pytest tests/ -v \
-                                    --html=report.html \
-                                    --self-contained-html \
-                                    --junit-xml=test-results.xml || true
-                            ''',
+                            script: """
+                                docker run --rm \
+                                    --memory="1g" \
+                                    --memory-swap="1g" \
+                                    -e APP_URL=${APP_URL} \
+                                    -v \$(pwd)/report.html:/tests/report.html \
+                                    -v \$(pwd)/test-results.xml:/tests/test-results.xml \
+                                    selenium-tests:latest \
+                                    pytest tests/ -v -x --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml
+                            """,
                             returnStatus: true
                         )
                         
-                        sh 'cp report.html ../ || echo "No report"'
-                        sh 'cp test-results.xml ../ || echo "No results"'
-                        
                         if (testStatus != 0) {
                             currentBuild.result = 'UNSTABLE'
-                            echo '⚠️ Some tests failed'
+                            echo "Tests encountered failures"
                         } else {
-                            echo '✅ All tests passed!'
+                            echo "All tests passed!"
                         }
                     }
                 }
@@ -50,40 +59,55 @@ pipeline {
     
     post {
         always {
-            archiveArtifacts artifacts: 'report.html,test-results.xml', allowEmptyArchive: true
-            junit testResults: 'test-results.xml', allowEmptyResults: true
-            publishHTML([
-                allowMissing: true,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: '.',
-                reportFiles: 'report.html',
-                reportName: 'Selenium Test Report'
-            ])
+            script {
+                dir('selenium-tests') {
+                    // Archive test reports
+                    archiveArtifacts artifacts: 'report.html,test-results.xml', allowEmptyArchive: true
+                    
+                    // Publish JUnit results
+                    junit testResults: 'test-results.xml', allowEmptyResults: true
+                    
+                    // Publish HTML report
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: '.',
+                        reportFiles: 'report.html',
+                        reportName: 'Selenium Test Report'
+                    ])
+                }
+            }
             
+            // Email notification
             emailext(
-                to: '${DEFAULT_RECIPIENTS}',
-                subject: 'Jenkins Build ${currentBuild.result}: ${env.JOB_NAME} #${env.BUILD_NUMBER}',
-                body: '''
-                    <html>
-                    <body>
-                        <h2>Build ${currentBuild.result}</h2>
-                        <p><b>Build:</b> ${env.BUILD_NUMBER}</p>
-                        <p><b>Status:</b> ${currentBuild.result}</p>
-                        <p><a href="${env.BUILD_URL}Selenium_20Test_20Report/">View Test Report</a></p>
-                    </body>
-                    </html>
-                ''',
-                mimeType: 'text/html',
-                recipientProviders: [
-                    [$class: 'DevelopersRecipientProvider'],
-                    [$class: 'RequesterRecipientProvider']
-                ]
+                subject: "Jenkins Build ${currentBuild.result}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    Build Status: ${currentBuild.result}
+                    
+                    Job: ${env.JOB_NAME}
+                    Build Number: ${env.BUILD_NUMBER}
+                    Build URL: ${env.BUILD_URL}
+                    
+                    Test Report: ${env.BUILD_URL}Selenium_20Test_20Report/
+                    
+                    Check Jenkins for detailed test results.
+                """,
+                to: "${DEFAULT_RECIPIENTS}",
+                attachLog: true
             )
         }
         
-        success { echo '✅ Pipeline completed successfully!' }
-        failure { echo '❌ Pipeline failed!' }
-        unstable { echo '⚠️ Tests failed but pipeline completed!' }
+        success {
+            echo '=== Pipeline completed successfully ==='
+        }
+        
+        failure {
+            echo '=== Pipeline failed ==='
+        }
+        
+        unstable {
+            echo '=== Pipeline unstable - some tests failed ==='
+        }
     }
 }

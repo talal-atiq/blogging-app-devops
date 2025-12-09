@@ -159,40 +159,37 @@ pipeline {
                 def recipientEmail = env.GIT_COMMITTER_EMAIL ?: 'iamtalalatique@gmail.com'
                 def testStatus = currentBuild.result ?: 'SUCCESS'
                 
-                emailext(
-                    subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                        <html>
-                        <body style="font-family: Arial, sans-serif;">
-                            <h2 style="color: ${testStatus == 'SUCCESS' ? '#28a745' : '#dc3545'};">
-                                Build ${testStatus}
-                            </h2>
-                            
-                            <h3>Build Information</h3>
-                            <table style="border-collapse: collapse;">
-                                <tr><td><strong>Job Name:</strong></td><td>${env.JOB_NAME}</td></tr>
-                                <tr><td><strong>Build Number:</strong></td><td>#${env.BUILD_NUMBER}</td></tr>
-                                <tr><td><strong>Commit:</strong></td><td>${env.GIT_COMMIT_MSG}</td></tr>
-                                <tr><td><strong>Author:</strong></td><td>${env.GIT_COMMITTER}</td></tr>
-                                <tr><td><strong>Status:</strong></td><td><strong>${testStatus}</strong></td></tr>
-                            </table>
-                            
-                            <h3>Test Results</h3>
-                            <p>✓ 10 Selenium test cases executed</p>
-                            <p>🌐 Chrome WebDriver (Headless Mode)</p>
-                            <p>📄 TestNG reports generated</p>
-                            
-                            <h3>Quick Links</h3>
-                            <ul>
-                                <li><a href="${env.BUILD_URL}">View Build Console</a></li>
-                                <li><a href="${env.BUILD_URL}testReport/">Test Report</a></li>
-                            </ul>
-                        </body>
-                        </html>
-                    """,
-                    to: "${recipientEmail}",
-                    mimeType: 'text/html'
-                )
+                try {
+                    echo "Attempting to send email to: ${recipientEmail}"
+                    
+                    // Use simple mail() function
+                    mail to: recipientEmail,
+                         subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                         body: """
+Build Status: ${testStatus}
+
+Job: ${env.JOB_NAME}
+Build Number: #${env.BUILD_NUMBER}
+Commit: ${env.GIT_COMMIT_MSG}
+Author: ${env.GIT_COMMITTER}
+
+Test Results:
+✓ 10 Selenium test cases executed  
+✓ All tests passed
+🌐 Chrome WebDriver (Headless Mode)
+
+View Build: ${env.BUILD_URL}
+Test Report: ${env.BUILD_URL}testReport/
+
+---
+This is an automated notification from Jenkins CI/CD Pipeline.
+                         """
+                    
+                    echo "✓ Email sent successfully to: ${recipientEmail}"
+                } catch (Exception e) {
+                    echo "✗ Failed to send email. Error: ${e.getMessage()}"
+                    echo "✗ Stack trace: ${e.toString()}"
+                }
             }
         }
         

@@ -31,7 +31,7 @@ This is a full-featured blog application built using the MERN stack (MongoDB, Ex
 ![Home page](https://github.com/Rakesh-99/fullstack-blog-app/blob/master/client/src/assests/blogScreenshots/homepage.png?raw=true)
 
 
-### Blog Details page 
+### Blog Details page :
 
 ![Blog details img1](https://github.com/Rakesh-99/fullstack-blog-app/blob/master/client/src/assests/blogScreenshots/blogdetails1.png?raw=true)
 

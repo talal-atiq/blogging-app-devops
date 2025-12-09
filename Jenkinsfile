@@ -62,24 +62,34 @@ pipeline {
                     echo "Commit Hash: ${commitHash}"
                     
                     // Use Python script to reliably extract email from GitHub API
-                    def githubEmail = sh(
-                        script: """
-                            python3 get_commit_email.py '${repoPath}' '${commitHash}' 2>/dev/null || echo ''
-                        """,
-                        returnStdout: true
-                    ).trim()
+                    def githubEmail = ''
+                    try {
+                        githubEmail = sh(
+                            script: """
+                                python3 get_commit_email.py '${repoPath}' '${commitHash}' 2>&1
+                            """,
+                            returnStdout: true
+                        ).trim()
+                    } catch (Exception e) {
+                        echo "Python script failed: ${e.message}"
+                        githubEmail = ''
+                    }
+                    
+                    echo "Python script returned: '${githubEmail}'"
                     
                     // Validate extracted email (should contain @)
-                    if (githubEmail && githubEmail.contains('@')) {
+                    if (githubEmail && githubEmail.contains('@') && !githubEmail.contains('Error')) {
                         env.GIT_COMMITTER_EMAIL = githubEmail
                         echo "✓ Email extracted from GitHub API: ${githubEmail}"
                     } else {
                         // Fallback to git log
-                        env.GIT_COMMITTER_EMAIL = sh(
+                        def gitLogEmail = sh(
                             script: 'git log -1 --pretty=%ae',
                             returnStdout: true
                         ).trim()
-                        echo "⚠ Using git log email (Python script failed or returned: '${githubEmail}')"
+                        env.GIT_COMMITTER_EMAIL = gitLogEmail
+                        echo "⚠ Using git log email: ${gitLogEmail}"
+                        echo "⚠ (GitHub API failed, returned: '${githubEmail}')"
                     }
                     
                     echo "Commit: ${env.GIT_COMMIT_MSG}"
@@ -217,7 +227,15 @@ pipeline {
                 
                 echo "Git log email (freshly extracted): '${finalEmail}'"
                 
-                def recipientEmail = finalEmail ?: 'iamtalalatique@gmail.com'
+                // Use the freshly extracted email (not env variable which might be 'null' string)
+                def recipientEmail = finalEmail
+                
+                // Fallback only if truly empty
+                if (!recipientEmail || recipientEmail == '' || recipientEmail == 'null') {
+                    recipientEmail = 'iamtalalatique@gmail.com'
+                    echo "⚠ No valid email found, using default"
+                }
+                
                 def testStatus = currentBuild.result ?: 'SUCCESS'
                 
                 echo "Final recipient email: '${recipientEmail}'"

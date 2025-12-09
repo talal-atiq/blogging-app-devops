@@ -2,102 +2,149 @@ pipeline {
     agent any
     
     environment {
-        APP_URL = 'http://3.238.100.116:8081'
-        DEFAULT_RECIPIENTS = 'iamtalalatique@gmail.com'  // Fallback if Git email not found
-        GIT_COMMITTER_EMAIL = ''  // Will be populated dynamically
+        // Environment variables for the build
+        DOCKER_COMPOSE_FILE = 'docker-compose.yml'
+        DB_URL = credentials('mongodb-url')  // Store in Jenkins credentials
+        JWT_TOKEN = credentials('jwt-token')  // Store in Jenkins credentials
     }
     
     stages {
-        stage('Checkout Code') {
+        stage('Checkout Code from GitHub') {
             steps {
-                echo '=== Checking out code from GitHub ==='
+                echo '========================================'
+                echo 'Stage 1: Checking out code from GitHub'
+                echo '========================================'
+                
+                // Clone the repository from GitHub
                 checkout scm
                 
                 script {
-                    // Get the email of the person who made the commit
-                    env.GIT_COMMITTER_EMAIL = sh(
-                        script: 'git log -1 --pretty=format:"%ae"',
+                    // Get commit information
+                    env.GIT_COMMIT_MSG = sh(
+                        script: 'git log -1 --pretty=%B',
                         returnStdout: true
                     ).trim()
-                    echo "Git committer email: ${env.GIT_COMMITTER_EMAIL}"
+                    env.GIT_COMMITTER = sh(
+                        script: 'git log -1 --pretty=%an',
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Commit: ${env.GIT_COMMIT_MSG}"
+                    echo "Author: ${env.GIT_COMMITTER}"
                 }
             }
         }
         
-        stage('Build Test Docker Image') {
+        stage('Build Frontend') {
             steps {
-                echo '=== Building Docker image for Selenium tests ==='
-                dir('selenium-tests') {
+                echo '========================================'
+                echo 'Stage 2: Building Frontend Application'
+                echo '========================================'
+                
+                dir('client') {
                     script {
-                        sh 'docker build -t selenium-tests:latest .'
+                        // Install dependencies and build the frontend
+                        sh '''
+                            npm install
+                            npm run build
+                        '''
+                        echo 'Frontend build completed successfully!'
                     }
                 }
             }
         }
         
-        stage('Run Selenium Tests in Docker') {
+        stage('Stop Previous Containers') {
             steps {
-                echo '=== Running Selenium tests in Docker container ==='
+                echo '========================================'
+                echo 'Stage 3: Stopping Previous Containers'
+                echo '========================================'
+                
                 script {
-                    dir('selenium-tests') {
-                        // Run tests and capture exit code
-                        def testStatus = sh(
-                            script: """
-                                set +e
-                                docker run --name selenium-test-run \
-                                    --memory="1g" \
-                                    --memory-swap="1g" \
-                                    -e APP_URL=${APP_URL} \
-                                    selenium-tests:latest \
-                                    pytest tests/test_selenium_lightweight.py -v --tb=short --html=report.html --self-contained-html --junit-xml=test-results.xml
-                                EXIT_CODE=\$?
-                                
-                                # Copy test results out of container
-                                docker cp selenium-test-run:/tests/report.html ./report.html 2>/dev/null || echo "No report.html"
-                                docker cp selenium-test-run:/tests/test-results.xml ./test-results.xml 2>/dev/null || echo "No test-results.xml"
-                                
-                                # Clean up container
-                                docker rm selenium-test-run 2>/dev/null || true
-                                
-                                exit \$EXIT_CODE
-                            """,
-                            returnStatus: true
-                        )
+                    // Stop and remove any existing containers
+                    sh '''
+                        docker-compose -f ${DOCKER_COMPOSE_FILE} down || true
+                    '''
+                    echo 'Previous containers stopped'
+                }
+            }
+        }
+        
+        stage('Deploy with Docker Compose') {
+            steps {
+                echo '========================================'
+                echo 'Stage 4: Deploying with Docker Compose'
+                echo '========================================'
+                
+                script {
+                    // Start containers using docker-compose
+                    // This uses volumes to mount code (Part-II requirement)
+                    sh '''
+                        export DB_URL="${DB_URL}"
+                        export JWT_TOKEN="${JWT_TOKEN}"
+                        docker-compose -f ${DOCKER_COMPOSE_FILE} up -d
+                    '''
+                    
+                    echo 'Containers started successfully!'
+                    
+                    // Wait for services to be ready
+                    sleep(time: 10, unit: 'SECONDS')
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                echo '========================================'
+                echo 'Stage 5: Verifying Deployment'
+                echo '========================================'
+                
+                script {
+                    // Check if containers are running
+                    sh '''
+                        echo "Running containers:"
+                        docker ps --filter "name=blogging"
                         
-                        if (testStatus != 0) {
-                            currentBuild.result = 'UNSTABLE'
-                            echo "Tests encountered failures (exit code: ${testStatus})"
-                        } else {
-                            echo "All tests passed!"
-                        }
-                    }
+                        echo "\nChecking backend health:"
+                        curl -f http://localhost:5001 || echo "Backend not responding"
+                        
+                        echo "\nChecking frontend health:"
+                        curl -f http://localhost:8081 || echo "Frontend not responding"
+                    '''
                 }
             }
         }
     }
     
     post {
-        always {
-            script {
-                dir('selenium-tests') {
-                    // Archive test reports
-                    archiveArtifacts artifacts: 'report.html,test-results.xml', allowEmptyArchive: true
-                    
-                    // Publish JUnit results
-                    junit testResults: 'test-results.xml', allowEmptyResults: true
-                    
-                    // Publish HTML report
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: '.',
-                        reportFiles: 'report.html',
-                        reportName: 'Selenium Test Report'
-                    ])
-                }
-            }
+        success {
+            echo '========================================'
+            echo 'Pipeline completed successfully!'
+            echo 'Application is running on:'
+            echo 'Frontend: http://<EC2-IP>:8081'
+            echo 'Backend: http://<EC2-IP>:5001'
+            echo '========================================'
+        }
+        
+        failure {
+            echo '========================================'
+            echo 'Pipeline failed!'
+            echo 'Check the logs above for details'
+            echo '========================================'
             
+            // Stop containers on failure
+            sh 'docker-compose -f ${DOCKER_COMPOSE_FILE} down || true'
+        }
+        
+        always {
+            // Show container logs for debugging
+            echo 'Container logs:'
+            sh '''
+                docker-compose -f ${DOCKER_COMPOSE_FILE} logs --tail=50 || true
+            '''
+        }
+    }
+}
             // Email notification to Git committer with HTML report
             script {
                 def recipientEmail = env.GIT_COMMITTER_EMAIL ?: env.DEFAULT_RECIPIENTS

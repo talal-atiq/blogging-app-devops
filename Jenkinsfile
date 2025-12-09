@@ -145,8 +145,3 @@ pipeline {
         }
     }
 }
-        unstable {
-            echo '=== Pipeline unstable - some tests failed ==='
-        }
-    }
-}

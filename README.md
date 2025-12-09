@@ -1,6 +1,6 @@
  # MERN Stack Blogging App DevOps:
 
-This is a full-featured blog application built using the MERN stack (MongoDB, Express.js, React.js, Node.js). Redux-toolkit for state management and Tailwind CSS for styling. The app includes features such as user authentication and authorization, an admin panel, light/dark theme switching, and the ability to comment on blog posts, like comments, search and sort blogs, and paginate the blog list.
+This is a full-featured blog application built using  MERN stack (MongoDB, Express.js, React.js, Node.js). Redux-toolkit for state management and Tailwind CSS for styling. The app includes features such as user authentication and authorization, an admin panel, light/dark theme switching, and the ability to comment on blog posts, like comments, search and sort blogs, and paginate the blog list.
 
 ## Features:
 

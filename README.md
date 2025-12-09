@@ -62,7 +62,7 @@ This is a full-featured blog application built using  MERN stack (MongoDB, Expre
 
 
 
-## Getting Started
+## Getting Started :
 
 Follow these instructions to set up the project locally.
 

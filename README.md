@@ -16,7 +16,7 @@ This is a full-featured blog application built using the MERN stack (MongoDB, Ex
 - **Blog Sorting**: Sort blogs by Ascending,Descending and by category.
 - **Show More**: Show more button for better performance and user experience.
 
-## Tech Stack
+## Tech Stack :
 
 - **Frontend**: React.js, Redux Toolkit, Tailwind CSS
 - **Backend**: Node.js, Express.js

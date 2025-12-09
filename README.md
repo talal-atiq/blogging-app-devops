@@ -2,7 +2,7 @@
 
 This is a full-featured blog application built using the MERN stack (MongoDB, Express.js, React.js, Node.js). Redux-toolkit for state management and Tailwind CSS for styling. The app includes features such as user authentication and authorization, an admin panel, light/dark theme switching, and the ability to comment on blog posts, like comments, search and sort blogs, and paginate the blog list.
 
-## Features
+## Features:
 
 - **User Authentication**: Secure user login and registration with password hashing.
 - **User friendly & design** : It is user responsive for all devices and has eye-catching design.

@@ -31,6 +31,13 @@ pipeline {
                         returnStdout: true
                     ).trim()
                     
+                    // DEBUG: Print all available environment variables related to Git/GitHub
+                    echo "=== DEBUG: Environment Variables ==="
+                    sh 'env | grep -i git || true'
+                    sh 'env | grep -i github || true'
+                    sh 'env | grep -i change || true'
+                    echo "==================================="
+                    
                     // Get commit hash
                     def commitHash = sh(
                         script: 'git rev-parse HEAD',
@@ -54,15 +61,10 @@ pipeline {
                     echo "Repository: ${repoPath}"
                     echo "Commit Hash: ${commitHash}"
                     
-                    // Use GitHub API to get commit author info  
-                    // Extract the author's email using grep and multiple sed passes for reliability
+                    // Use Python script to reliably extract email from GitHub API
                     def githubEmail = sh(
                         script: """
-                            curl -s -H "Accept: application/vnd.github.v3+json" \
-                                https://api.github.com/repos/${repoPath}/commits/${commitHash} | \
-                            grep -o '"commit":{"author":{"name":"[^"]*","email":"[^"]*"' | \
-                            grep -o 'email":"[^"]*"' | \
-                            sed 's/email":"//;s/"//'
+                            python3 get_commit_email.py '${repoPath}' '${commitHash}' 2>/dev/null || echo ''
                         """,
                         returnStdout: true
                     ).trim()
@@ -77,7 +79,7 @@ pipeline {
                             script: 'git log -1 --pretty=%ae',
                             returnStdout: true
                         ).trim()
-                        echo "⚠ Using git log email (GitHub API extraction failed, got: '${githubEmail}')"
+                        echo "⚠ Using git log email (Python script failed or returned: '${githubEmail}')"
                     }
                     
                     echo "Commit: ${env.GIT_COMMIT_MSG}"

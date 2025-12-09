@@ -30,10 +30,72 @@ pipeline {
                         script: 'git log -1 --pretty=%an',
                         returnStdout: true
                     ).trim()
-                    env.GIT_COMMITTER_EMAIL = sh(
-                        script: 'git log -1 --pretty=%ae',
-                        returnStdout: true
-                    ).trim()
+                    
+                    // Get GitHub username from webhook payload or git log
+                    def githubUser = ''
+                    if (env.CHANGE_AUTHOR) {
+                        githubUser = env.CHANGE_AUTHOR
+                    } else {
+                        // Extract from git remote URL
+                        def gitUrl = sh(
+                            script: 'git config --get remote.origin.url',
+                            returnStdout: true
+                        ).trim()
+                        
+                        // Get commit hash
+                        def commitHash = sh(
+                            script: 'git rev-parse HEAD',
+                            returnStdout: true
+                        ).trim()
+                        
+                        // Extract repo owner and name from git URL
+                        // Example: https://github.com/talal-atiq/blogging-app-devops.git
+                        def matcher = (gitUrl =~ /github\.com[\/:]([^\/]+)\/([^\/\.]+)/)
+                        if (matcher.find()) {
+                            def repoOwner = matcher.group(1)
+                            def repoName = matcher.group(2)
+                            
+                            echo "Repository: ${repoOwner}/${repoName}"
+                            echo "Commit Hash: ${commitHash}"
+                            
+                            // Use GitHub API to get commit author info
+                            def apiResponse = sh(
+                                script: """
+                                    curl -s -H "Accept: application/vnd.github.v3+json" \
+                                    https://api.github.com/repos/${repoOwner}/${repoName}/commits/${commitHash}
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            
+                            // Parse JSON to extract email (using simple grep/sed since no jq)
+                            // Try to get author email from API response
+                            def emailMatch = sh(
+                                script: """
+                                    echo '${apiResponse}' | grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"\\(.*\\)"/\\1/'
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            
+                            if (emailMatch) {
+                                env.GIT_COMMITTER_EMAIL = emailMatch
+                                echo "✓ Email extracted from GitHub API: ${emailMatch}"
+                            } else {
+                                // Fallback to git log
+                                env.GIT_COMMITTER_EMAIL = sh(
+                                    script: 'git log -1 --pretty=%ae',
+                                    returnStdout: true
+                                ).trim()
+                                echo "⚠ Using git log email (GitHub API didn't return email): ${env.GIT_COMMITTER_EMAIL}"
+                            }
+                        } else {
+                            // Fallback if parsing fails
+                            env.GIT_COMMITTER_EMAIL = sh(
+                                script: 'git log -1 --pretty=%ae',
+                                returnStdout: true
+                            ).trim()
+                            echo "⚠ Could not parse repo URL, using git log email"
+                        }
+                    }
                     
                     echo "Commit: ${env.GIT_COMMIT_MSG}"
                     echo "Author: ${env.GIT_COMMITTER}"

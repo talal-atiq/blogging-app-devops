@@ -241,32 +241,116 @@ pipeline {
                 echo "Final recipient email: '${recipientEmail}'"
                 echo "==================="
                 
+                // Extract test results from JUnit XML
+                def testSummary = ""
+                def testDetails = ""
+                try {
+                    dir('selenium-tests-java/target/surefire-reports') {
+                        def testResultFiles = findFiles(glob: 'TEST-*.xml')
+                        if (testResultFiles.length > 0) {
+                            def testResults = junit testResults: '*.xml', allowEmptyResults: true
+                            
+                            // Get test case details
+                            testDetails = sh(
+                                script: '''
+                                    echo "Test Case Results:"
+                                    echo "=================="
+                                    for file in TEST-*.xml; do
+                                        if [ -f "$file" ]; then
+                                            echo ""
+                                            grep -o 'testcase name="[^"]*"' "$file" | sed 's/testcase name="\\(.*\\)"/  ✓ \\1/' || true
+                                        fi
+                                    done
+                                    echo ""
+                                    echo "Summary:"
+                                    echo "--------"
+                                    grep -h 'testsuite' TEST-*.xml | head -1 | sed 's/.*tests="\\([^"]*\\)".*failures="\\([^"]*\\)".*errors="\\([^"]*\\)".*skipped="\\([^"]*\\)".*/Total Tests: \\1\\nPassed: \\1\\nFailures: \\2\\nErrors: \\3\\nSkipped: \\4/' || echo "Could not parse summary"
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                        } else {
+                            testDetails = "No test result files found."
+                        }
+                    }
+                } catch (Exception e) {
+                    testDetails = "Error reading test results: ${e.message}"
+                }
+                
+                // Collect log file paths
+                def logFiles = []
+                try {
+                    dir('selenium-tests-java/target/surefire-reports') {
+                        def txtFiles = findFiles(glob: '*.txt')
+                        txtFiles.each { file ->
+                            logFiles.add("selenium-tests-java/target/surefire-reports/${file.name}")
+                        }
+                    }
+                } catch (Exception e) {
+                    echo "Could not find log files: ${e.message}"
+                }
+                
                 try {
                     echo "Attempting to send email to: ${recipientEmail}"
                     
-                    // Use simple mail() function
-                    mail to: recipientEmail,
-                         subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                         body: """
-Build Status: ${testStatus}
+                    // Build email body with detailed test results
+                    def emailBody = """
+╔═══════════════════════════════════════════════════════════════╗
+║          JENKINS CI/CD PIPELINE - BUILD NOTIFICATION          ║
+╚═══════════════════════════════════════════════════════════════╝
 
-Job: ${env.JOB_NAME}
-Build Number: #${env.BUILD_NUMBER}
-Commit: ${env.GIT_COMMIT_MSG}
-Author: ${env.GIT_COMMITTER}
-Recipient: ${recipientEmail}
+Build Status: ${testStatus} ${testStatus == 'SUCCESS' ? '✓' : '✗'}
 
-Test Results:
-✓ 10 Selenium test cases executed  
-✓ All tests passed
-🌐 Chrome WebDriver (Headless Mode)
+PROJECT INFORMATION:
+━━━━━━━━━━━━━━━━━━━━
+Job Name      : ${env.JOB_NAME}
+Build Number  : #${env.BUILD_NUMBER}
+Build URL     : ${env.BUILD_URL}
 
-View Build: ${env.BUILD_URL}
-Test Report: ${env.BUILD_URL}testReport/
+COMMIT DETAILS:
+━━━━━━━━━━━━━━━━━━━━
+Author        : ${env.GIT_COMMITTER}
+Email         : ${recipientEmail}
+Commit Message: ${env.GIT_COMMIT_MSG}
 
----
+SELENIUM TEST RESULTS:
+━━━━━━━━━━━━━━━━━━━━
+${testDetails}
+
+REPORTS & ARTIFACTS:
+━━━━━━━━━━━━━━━━━━━━
+📊 Test Report    : ${env.BUILD_URL}testReport/
+📁 Build Artifacts: ${env.BUILD_URL}artifact/
+📋 Console Output : ${env.BUILD_URL}console
+
+DEPLOYMENT STATUS:
+━━━━━━━━━━━━━━━━━━━━
+🌐 Frontend       : http://35.153.144.16:8081
+🔧 Backend        : http://35.153.144.16:5001
+
+${logFiles.size() > 0 ? '\n📎 Attached Files:\n' + logFiles.collect { "   - ${it.split('/').last()}" }.join('\n') : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This is an automated notification from Jenkins CI/CD Pipeline.
-                         """
+For more details, visit: ${env.BUILD_URL}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    """
+                    
+                    // Send email with attachments if available
+                    if (logFiles.size() > 0) {
+                        emailext(
+                            to: recipientEmail,
+                            subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                            body: emailBody,
+                            attachmentsPattern: 'selenium-tests-java/target/surefire-reports/*.txt,selenium-tests-java/target/surefire-reports/TEST-*.xml',
+                            mimeType: 'text/plain'
+                        )
+                    } else {
+                        mail(
+                            to: recipientEmail,
+                            subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                            body: emailBody
+                        )
+                    }
                     
                     echo "✓ Email sent successfully to: ${recipientEmail}"
                 } catch (Exception e) {

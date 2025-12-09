@@ -203,8 +203,25 @@ pipeline {
             
             // Send email notification
             script {
-                def recipientEmail = env.GIT_COMMITTER_EMAIL ?: 'iamtalalatique@gmail.com'
+                // DEBUG: Check what email we have
+                echo "=== EMAIL DEBUG ==="
+                echo "env.GIT_COMMITTER_EMAIL = '${env.GIT_COMMITTER_EMAIL}'"
+                echo "env.GIT_COMMITTER = '${env.GIT_COMMITTER}'"
+                echo "env.GIT_COMMIT_MSG = '${env.GIT_COMMIT_MSG}'"
+                
+                // Re-extract email here to be absolutely sure
+                def finalEmail = sh(
+                    script: 'git log -1 --pretty=%ae',
+                    returnStdout: true
+                ).trim()
+                
+                echo "Git log email (freshly extracted): '${finalEmail}'"
+                
+                def recipientEmail = finalEmail ?: 'iamtalalatique@gmail.com'
                 def testStatus = currentBuild.result ?: 'SUCCESS'
+                
+                echo "Final recipient email: '${recipientEmail}'"
+                echo "==================="
                 
                 try {
                     echo "Attempting to send email to: ${recipientEmail}"
@@ -219,6 +236,7 @@ Job: ${env.JOB_NAME}
 Build Number: #${env.BUILD_NUMBER}
 Commit: ${env.GIT_COMMIT_MSG}
 Author: ${env.GIT_COMMITTER}
+Recipient: ${recipientEmail}
 
 Test Results:
 ✓ 10 Selenium test cases executed  

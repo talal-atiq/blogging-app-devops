@@ -52,7 +52,7 @@ This is a full-featured blog application built using the MERN stack (MongoDB, Ex
 
 ![Admin panel - User List](https://github.com/Rakesh-99/fullstack-blog-app/blob/master/client/src/assests/blogScreenshots/allUserList.png?raw=true)
 
-### Comment
+### Comment :
 
 ![Comment](https://github.com/Rakesh-99/fullstack-blog-app/blob/master/client/src/assests/blogScreenshots/comment.png?raw=true)
 

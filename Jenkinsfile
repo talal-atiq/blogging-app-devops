@@ -241,52 +241,51 @@ pipeline {
                 echo "Final recipient email: '${recipientEmail}'"
                 echo "==================="
                 
-                // Extract test results from JUnit XML
-                def testSummary = ""
+                // Extract test results from JUnit XML using shell commands
                 def testDetails = ""
                 try {
-                    dir('selenium-tests-java/target/surefire-reports') {
-                        def testResultFiles = findFiles(glob: 'TEST-*.xml')
-                        if (testResultFiles.length > 0) {
-                            def testResults = junit testResults: '*.xml', allowEmptyResults: true
-                            
-                            // Get test case details
-                            testDetails = sh(
-                                script: '''
-                                    echo "Test Case Results:"
-                                    echo "=================="
-                                    for file in TEST-*.xml; do
-                                        if [ -f "$file" ]; then
-                                            echo ""
-                                            grep -o 'testcase name="[^"]*"' "$file" | sed 's/testcase name="\\(.*\\)"/  ✓ \\1/' || true
-                                        fi
-                                    done
-                                    echo ""
-                                    echo "Summary:"
-                                    echo "--------"
-                                    grep -h 'testsuite' TEST-*.xml | head -1 | sed 's/.*tests="\\([^"]*\\)".*failures="\\([^"]*\\)".*errors="\\([^"]*\\)".*skipped="\\([^"]*\\)".*/Total Tests: \\1\\nPassed: \\1\\nFailures: \\2\\nErrors: \\3\\nSkipped: \\4/' || echo "Could not parse summary"
-                                ''',
-                                returnStdout: true
-                            ).trim()
-                        } else {
-                            testDetails = "No test result files found."
-                        }
-                    }
+                    testDetails = sh(
+                        script: '''
+                            cd selenium-tests-java/target/surefire-reports 2>/dev/null || exit 0
+                            if [ -f "TEST-*.xml" ]; then
+                                echo "Test Case Results:"
+                                echo "=================="
+                                echo ""
+                                for file in TEST-*.xml; do
+                                    [ -f "$file" ] || continue
+                                    grep -o 'testcase name="[^"]*"' "$file" 2>/dev/null | sed 's/testcase name="\\(.*\\)"/  ✓ \\1/' || true
+                                done
+                                echo ""
+                                echo "Summary:"
+                                echo "--------"
+                                for file in TEST-*.xml; do
+                                    [ -f "$file" ] || continue
+                                    grep 'testsuite' "$file" 2>/dev/null | head -1 | sed 's/.*tests="\\([^"]*\\)".*failures="\\([^"]*\\)".*errors="\\([^"]*\\)".*skipped="\\([^"]*\\)".*/Total Tests: \\1\\nPassed: \\1\\nFailures: \\2\\nErrors: \\3\\nSkipped: \\4/' || true
+                                    break
+                                done
+                            else
+                                echo "No test results available"
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
                 } catch (Exception e) {
                     testDetails = "Error reading test results: ${e.message}"
                 }
                 
-                // Collect log file paths
-                def logFiles = []
+                // Get list of attachment files
+                def attachmentsList = ""
                 try {
-                    dir('selenium-tests-java/target/surefire-reports') {
-                        def txtFiles = findFiles(glob: '*.txt')
-                        txtFiles.each { file ->
-                            logFiles.add("selenium-tests-java/target/surefire-reports/${file.name}")
-                        }
-                    }
+                    attachmentsList = sh(
+                        script: '''
+                            cd selenium-tests-java/target/surefire-reports 2>/dev/null || exit 0
+                            echo "📎 Test Report Files:"
+                            ls -1 *.txt *.xml 2>/dev/null | sed 's/^/   - /' || echo "   (No files found)"
+                        ''',
+                        returnStdout: true
+                    ).trim()
                 } catch (Exception e) {
-                    echo "Could not find log files: ${e.message}"
+                    attachmentsList = ""
                 }
                 
                 try {
@@ -319,15 +318,15 @@ ${testDetails}
 REPORTS & ARTIFACTS:
 ━━━━━━━━━━━━━━━━━━━━
 📊 Test Report    : ${env.BUILD_URL}testReport/
-📁 Build Artifacts: ${env.BUILD_URL}artifact/
+📁 Build Artifacts: ${env.BUILD_URL}artifact/selenium-tests-java/target/surefire-reports/
 📋 Console Output : ${env.BUILD_URL}console
+
+${attachmentsList}
 
 DEPLOYMENT STATUS:
 ━━━━━━━━━━━━━━━━━━━━
 🌐 Frontend       : http://35.153.144.16:8081
 🔧 Backend        : http://35.153.144.16:5001
-
-${logFiles.size() > 0 ? '\n📎 Attached Files:\n' + logFiles.collect { "   - ${it.split('/').last()}" }.join('\n') : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This is an automated notification from Jenkins CI/CD Pipeline.
@@ -335,8 +334,8 @@ For more details, visit: ${env.BUILD_URL}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                     """
                     
-                    // Send email with attachments if available
-                    if (logFiles.size() > 0) {
+                    // Try to send with emailext (supports attachments), fallback to mail()
+                    try {
                         emailext(
                             to: recipientEmail,
                             subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -344,15 +343,17 @@ For more details, visit: ${env.BUILD_URL}
                             attachmentsPattern: 'selenium-tests-java/target/surefire-reports/*.txt,selenium-tests-java/target/surefire-reports/TEST-*.xml',
                             mimeType: 'text/plain'
                         )
-                    } else {
+                        echo "✓ Email with attachments sent successfully to: ${recipientEmail}"
+                    } catch (Exception attachEx) {
+                        echo "⚠ Could not send with attachments, trying simple email: ${attachEx.message}"
                         mail(
                             to: recipientEmail,
                             subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                             body: emailBody
                         )
+                        echo "✓ Email sent successfully to: ${recipientEmail}"
                     }
                     
-                    echo "✓ Email sent successfully to: ${recipientEmail}"
                 } catch (Exception e) {
                     echo "✗ Failed to send email. Error: ${e.getMessage()}"
                     echo "✗ Stack trace: ${e.toString()}"

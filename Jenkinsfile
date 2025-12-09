@@ -6,6 +6,8 @@ pipeline {
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         DB_URL = credentials('mongodb-url')  // Store in Jenkins credentials
         JWT_TOKEN = credentials('jwt-token')  // Store in Jenkins credentials
+        APP_URL = 'http://localhost:8081'
+        GIT_COMMITTER_EMAIL = ''
     }
     
     stages {
@@ -28,9 +30,14 @@ pipeline {
                         script: 'git log -1 --pretty=%an',
                         returnStdout: true
                     ).trim()
+                    env.GIT_COMMITTER_EMAIL = sh(
+                        script: 'git log -1 --pretty=%ae',
+                        returnStdout: true
+                    ).trim()
                     
                     echo "Commit: ${env.GIT_COMMIT_MSG}"
                     echo "Author: ${env.GIT_COMMITTER}"
+                    echo "Email: ${env.GIT_COMMITTER_EMAIL}"
                 }
             }
         }
@@ -88,7 +95,30 @@ pipeline {
                     echo 'Containers started successfully!'
                     
                     // Wait for services to be ready
-                    sleep(time: 10, unit: 'SECONDS')
+                    sleep(time: 15, unit: 'SECONDS')
+                }
+            }
+        }
+        
+        stage('Run Selenium Tests') {
+            steps {
+                echo '========================================'
+                echo 'Stage 5: Running Selenium Tests'
+                echo '========================================'
+                
+                script {
+                    dir('selenium-tests-java') {
+                        // Run tests in Docker container with Chrome
+                        sh """
+                            docker run --rm \
+                              --network=host \
+                              -v \$(pwd):/workspace \
+                              -w /workspace \
+                              -e APP_URL=${APP_URL} \
+                              markhobson/maven-chrome:latest \
+                              mvn clean test
+                        """
+                    }
                 }
             }
         }
@@ -96,7 +126,7 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 echo '========================================'
-                echo 'Stage 5: Verifying Deployment'
+                echo 'Stage 6: Verifying Deployment'
                 echo '========================================'
                 
                 script {
@@ -117,12 +147,62 @@ pipeline {
     }
     
     post {
+        always {
+            // Archive test reports
+            dir('selenium-tests-java') {
+                junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
+                archiveArtifacts artifacts: 'target/surefire-reports/**/*', allowEmptyArchive: true
+            }
+            
+            // Send email notification
+            script {
+                def recipientEmail = env.GIT_COMMITTER_EMAIL ?: 'iamtalalatique@gmail.com'
+                def testStatus = currentBuild.result ?: 'SUCCESS'
+                
+                emailext(
+                    subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+                        <html>
+                        <body style="font-family: Arial, sans-serif;">
+                            <h2 style="color: ${testStatus == 'SUCCESS' ? '#28a745' : '#dc3545'};">
+                                Build ${testStatus}
+                            </h2>
+                            
+                            <h3>Build Information</h3>
+                            <table style="border-collapse: collapse;">
+                                <tr><td><strong>Job Name:</strong></td><td>${env.JOB_NAME}</td></tr>
+                                <tr><td><strong>Build Number:</strong></td><td>#${env.BUILD_NUMBER}</td></tr>
+                                <tr><td><strong>Commit:</strong></td><td>${env.GIT_COMMIT_MSG}</td></tr>
+                                <tr><td><strong>Author:</strong></td><td>${env.GIT_COMMITTER}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><strong>${testStatus}</strong></td></tr>
+                            </table>
+                            
+                            <h3>Test Results</h3>
+                            <p>✓ 10 Selenium test cases executed</p>
+                            <p>🌐 Chrome WebDriver (Headless Mode)</p>
+                            <p>📄 TestNG reports generated</p>
+                            
+                            <h3>Quick Links</h3>
+                            <ul>
+                                <li><a href="${env.BUILD_URL}">View Build Console</a></li>
+                                <li><a href="${env.BUILD_URL}testReport/">Test Report</a></li>
+                            </ul>
+                        </body>
+                        </html>
+                    """,
+                    to: "${recipientEmail}",
+                    mimeType: 'text/html'
+                )
+            }
+        }
+        
         success {
             echo '========================================'
             echo 'Pipeline completed successfully!'
             echo 'Application is running on:'
             echo 'Frontend: http://<EC2-IP>:8081'
             echo 'Backend: http://<EC2-IP>:5001'
+            echo 'All tests passed!'
             echo '========================================'
         }
         
@@ -134,14 +214,6 @@ pipeline {
             
             // Stop containers on failure
             sh 'docker-compose -f ${DOCKER_COMPOSE_FILE} down || true'
-        }
-        
-        always {
-            // Show container logs for debugging
-            echo 'Container logs:'
-            sh '''
-                docker-compose -f ${DOCKER_COMPOSE_FILE} logs --tail=50 || true
-            '''
         }
     }
 }

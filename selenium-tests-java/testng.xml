@@ -1,0 +1,8 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Blogging Application Test Suite" parallel="false">
+    <test name="Blogging App Tests">
+        <classes>
+            <class name="com.blogging.test.BloggingAppTest"/>
+        </classes>
+    </test>
+</suite>

@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Backend Service (Node.js/Express)
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: blogging-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env
+    networks:
+      - blogging-network
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+
+  # Frontend Service (React + Nginx)
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: blogging-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - blogging-network
+
+# Custom network for inter-container communication
+networks:
+  blogging-network:
+    driver: bridge

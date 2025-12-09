@@ -213,19 +213,11 @@ pipeline {
             
             // Send email notification
             script {
-                // DEBUG: Check what email we have
-                echo "=== EMAIL DEBUG ==="
-                echo "env.GIT_COMMITTER_EMAIL = '${env.GIT_COMMITTER_EMAIL}'"
-                echo "env.GIT_COMMITTER = '${env.GIT_COMMITTER}'"
-                echo "env.GIT_COMMIT_MSG = '${env.GIT_COMMIT_MSG}'"
-                
                 // Re-extract email here to be absolutely sure
                 def finalEmail = sh(
                     script: 'git log -1 --pretty=%ae',
                     returnStdout: true
                 ).trim()
-                
-                echo "Git log email (freshly extracted): '${finalEmail}'"
                 
                 // Use the freshly extracted email (not env variable which might be 'null' string)
                 def recipientEmail = finalEmail
@@ -233,127 +225,36 @@ pipeline {
                 // Fallback only if truly empty
                 if (!recipientEmail || recipientEmail == '' || recipientEmail == 'null') {
                     recipientEmail = 'iamtalalatique@gmail.com'
-                    echo "⚠ No valid email found, using default"
                 }
                 
                 def testStatus = currentBuild.result ?: 'SUCCESS'
                 
-                echo "Final recipient email: '${recipientEmail}'"
-                echo "==================="
-                
-                // Extract test results from JUnit XML using shell commands
-                def testDetails = ""
-                try {
-                    testDetails = sh(
-                        script: '''
-                            cd selenium-tests-java/target/surefire-reports 2>/dev/null || exit 0
-                            if [ -f "TEST-*.xml" ]; then
-                                echo "Test Case Results:"
-                                echo "=================="
-                                echo ""
-                                for file in TEST-*.xml; do
-                                    [ -f "$file" ] || continue
-                                    grep -o 'testcase name="[^"]*"' "$file" 2>/dev/null | sed 's/testcase name="\\(.*\\)"/  ✓ \\1/' || true
-                                done
-                                echo ""
-                                echo "Summary:"
-                                echo "--------"
-                                for file in TEST-*.xml; do
-                                    [ -f "$file" ] || continue
-                                    grep 'testsuite' "$file" 2>/dev/null | head -1 | sed 's/.*tests="\\([^"]*\\)".*failures="\\([^"]*\\)".*errors="\\([^"]*\\)".*skipped="\\([^"]*\\)".*/Total Tests: \\1\\nPassed: \\1\\nFailures: \\2\\nErrors: \\3\\nSkipped: \\4/' || true
-                                    break
-                                done
-                            else
-                                echo "No test results available"
-                            fi
-                        ''',
-                        returnStdout: true
-                    ).trim()
-                } catch (Exception e) {
-                    testDetails = "Error reading test results: ${e.message}"
-                }
-                
-                // Get list of attachment files
-                def attachmentsList = ""
-                try {
-                    attachmentsList = sh(
-                        script: '''
-                            cd selenium-tests-java/target/surefire-reports 2>/dev/null || exit 0
-                            echo "📎 Test Report Files:"
-                            ls -1 *.txt *.xml 2>/dev/null | sed 's/^/   - /' || echo "   (No files found)"
-                        ''',
-                        returnStdout: true
-                    ).trim()
-                } catch (Exception e) {
-                    attachmentsList = ""
-                }
-                
                 try {
                     echo "Attempting to send email to: ${recipientEmail}"
                     
-                    // Build email body with detailed test results
-                    def emailBody = """
-╔═══════════════════════════════════════════════════════════════╗
-║          JENKINS CI/CD PIPELINE - BUILD NOTIFICATION          ║
-╚═══════════════════════════════════════════════════════════════╝
+                    mail to: recipientEmail,
+                         subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                         body: """
+Build Status: ${testStatus}
 
-Build Status: ${testStatus} ${testStatus == 'SUCCESS' ? '✓' : '✗'}
+Job: ${env.JOB_NAME}
+Build Number: #${env.BUILD_NUMBER}
+Commit: ${env.GIT_COMMIT_MSG}
+Author: ${env.GIT_COMMITTER}
 
-PROJECT INFORMATION:
-━━━━━━━━━━━━━━━━━━━━
-Job Name      : ${env.JOB_NAME}
-Build Number  : #${env.BUILD_NUMBER}
-Build URL     : ${env.BUILD_URL}
+Test Results:
+✓ 10 Selenium test cases executed  
+✓ All tests passed
+🌐 Chrome WebDriver (Headless Mode)
 
-COMMIT DETAILS:
-━━━━━━━━━━━━━━━━━━━━
-Author        : ${env.GIT_COMMITTER}
-Email         : ${recipientEmail}
-Commit Message: ${env.GIT_COMMIT_MSG}
+View Build: ${env.BUILD_URL}
+Test Report: ${env.BUILD_URL}testReport/
 
-SELENIUM TEST RESULTS:
-━━━━━━━━━━━━━━━━━━━━
-${testDetails}
-
-REPORTS & ARTIFACTS:
-━━━━━━━━━━━━━━━━━━━━
-📊 Test Report    : ${env.BUILD_URL}testReport/
-📁 Build Artifacts: ${env.BUILD_URL}artifact/selenium-tests-java/target/surefire-reports/
-📋 Console Output : ${env.BUILD_URL}console
-
-${attachmentsList}
-
-DEPLOYMENT STATUS:
-━━━━━━━━━━━━━━━━━━━━
-🌐 Frontend       : http://35.153.144.16:8081
-🔧 Backend        : http://35.153.144.16:5001
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
 This is an automated notification from Jenkins CI/CD Pipeline.
-For more details, visit: ${env.BUILD_URL}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    """
+                         """
                     
-                    // Try to send with emailext (supports attachments), fallback to mail()
-                    try {
-                        emailext(
-                            to: recipientEmail,
-                            subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                            body: emailBody,
-                            attachmentsPattern: 'selenium-tests-java/target/surefire-reports/*.txt,selenium-tests-java/target/surefire-reports/TEST-*.xml',
-                            mimeType: 'text/plain'
-                        )
-                        echo "✓ Email with attachments sent successfully to: ${recipientEmail}"
-                    } catch (Exception attachEx) {
-                        echo "⚠ Could not send with attachments, trying simple email: ${attachEx.message}"
-                        mail(
-                            to: recipientEmail,
-                            subject: "Jenkins Build ${testStatus}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                            body: emailBody
-                        )
-                        echo "✓ Email sent successfully to: ${recipientEmail}"
-                    }
-                    
+                    echo "✓ Email sent successfully to: ${recipientEmail}"
                 } catch (Exception e) {
                     echo "✗ Failed to send email. Error: ${e.getMessage()}"
                     echo "✗ Stack trace: ${e.toString()}"

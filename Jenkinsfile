@@ -54,17 +54,21 @@ pipeline {
                     echo "Repository: ${repoPath}"
                     echo "Commit Hash: ${commitHash}"
                     
-                    // Use GitHub API to get commit author info
+                    // Use GitHub API to get commit author info  
+                    // Extract the author's email using grep and multiple sed passes for reliability
                     def githubEmail = sh(
                         script: """
                             curl -s -H "Accept: application/vnd.github.v3+json" \
                                 https://api.github.com/repos/${repoPath}/commits/${commitHash} | \
-                            grep -o '"email":"[^"]*"' | head -1 | sed 's/"email":"\\(.*\\)"/\\1/'
+                            grep -o '"commit":{"author":{"name":"[^"]*","email":"[^"]*"' | \
+                            grep -o 'email":"[^"]*"' | \
+                            sed 's/email":"//;s/"//'
                         """,
                         returnStdout: true
                     ).trim()
                     
-                    if (githubEmail && githubEmail != '') {
+                    // Validate extracted email (should contain @)
+                    if (githubEmail && githubEmail.contains('@')) {
                         env.GIT_COMMITTER_EMAIL = githubEmail
                         echo "✓ Email extracted from GitHub API: ${githubEmail}"
                     } else {
@@ -73,7 +77,7 @@ pipeline {
                             script: 'git log -1 --pretty=%ae',
                             returnStdout: true
                         ).trim()
-                        echo "⚠ Using git log email (GitHub API didn't return email): ${env.GIT_COMMITTER_EMAIL}"
+                        echo "⚠ Using git log email (GitHub API extraction failed, got: '${githubEmail}')"
                     }
                     
                     echo "Commit: ${env.GIT_COMMIT_MSG}"

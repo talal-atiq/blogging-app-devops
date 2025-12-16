@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  labels:
+    app: blogging-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blogging-backend
+  template:
+    metadata:
+      labels:
+        app: blogging-backend
+    spec:
+      containers:
+      - name: backend
+        image: talal123atiq/blogging-backend:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        - name: DB_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: mongodb-url
+        - name: JWT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: jwt-token
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
